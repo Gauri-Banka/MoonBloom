@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Moonbloom</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #fff8f7;
+        --panel: #ffffff;
+        --accent: #ff7aa2;
+        --accent-soft: #ffe2ec;
+        --text: #4e3b43;
+        --muted: #8a7280;
+        --border: #f4dce5;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: Inter, "Segoe UI", sans-serif; background: linear-gradient(135deg, #fff8f7, #fff2f6); color: var(--text); }
+      .app { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+      .shell { width: min(1100px, 100%); display: grid; grid-template-columns: 340px 1fr; background: var(--panel); border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(255, 122, 162, 0.16); border: 1px solid var(--border); }
+      .sidebar { background: linear-gradient(180deg, #fff4f7, #fff8fc); border-right: 1px solid var(--border); padding: 20px; }
+      .brand { font-size: 1.6rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+      .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 16px; }
+      .card { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+      .pill { display: inline-flex; background: var(--accent-soft); color: #b23d65; padding: 6px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
+      .auth { display: grid; gap: 10px; }
+      .auth input, .room-form input { border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-size: 1rem; }
+      .auth button, .room-form button { border: 0; background: var(--accent); color: white; padding: 12px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+      .room-form { display: grid; gap: 8px; margin-top: 8px; }
+      .conversation-list { display: grid; gap: 8px; }
+      .conversation-button { border: 1px solid var(--border); background: white; padding: 10px 12px; border-radius: 12px; text-align: left; cursor: pointer; color: var(--text); }
+      .conversation-button.active { background: var(--accent-soft); border-color: #ffb5c9; }
+      .chat-area { display: flex; flex-direction: column; min-height: 70vh; }
+      .chat-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+      .messages { flex: 1; padding: 20px; overflow: auto; display: flex; flex-direction: column; gap: 10px; background: #fffdfd; }
+      .bubble { max-width: 78%; padding: 12px 14px; border-radius: 16px; line-height: 1.4; }
+      .bubble.me { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 6px; }
+      .bubble.other { align-self: flex-start; background: var(--accent-soft); color: var(--text); border-bottom-left-radius: 6px; }
+      .bubble.system { align-self: center; background: #f7f0f4; color: var(--muted); font-size: 0.9rem; }
+      .bubble .meta { font-size: 0.74rem; opacity: 0.8; margin-top: 4px; }
+      .composer { border-top: 1px solid var(--border); padding: 16px; display: flex; gap: 10px; }
+      .composer input { flex: 1; border: 1px solid var(--border); border-radius: 999px; padding: 12px 14px; font-size: 1rem; }
+      .composer button { border: 0; background: var(--accent); color: white; border-radius: 999px; padding: 12px 16px; font-weight: 700; cursor: pointer; }
+      .hidden { display: none; }
+      @media (max-width: 860px) { .shell { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--border); } }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="shell">
+        <aside class="sidebar">
+          <div class="brand">Moonbloom</div>
+          <div class="sub">A cozy, cute chat experience with a soft and responsive feel.</div>
+          <div class="card" id="authCard">
+            <div class="pill">Welcome</div>
+            <div class="auth" style="margin-top: 10px;">
+              <input id="username" placeholder="Username" />
+              <input id="password" type="password" placeholder="Password" />
+              <button id="loginBtn">Enter Moonbloom</button>
+            </div>
+          </div>
+          <div class="card hidden" id="statusCard">
+            <strong id="userNameLabel">Guest</strong>
+            <div id="presenceList" style="margin-top: 8px; color: var(--muted);"></div>
+          </div>
+          <div class="card">
+            <div class="pill">Rooms</div>
+            <div class="conversation-list" id="conversationList" style="margin-top: 10px;"></div>
+            <div class="room-form">
+              <input id="roomName" placeholder="New room name" />
+              <button id="createRoomBtn">Create room</button>
+            </div>
+          </div>
+        </aside>
+        <main class="chat-area">
+          <div class="chat-header">
+            <div>
+              <strong id="roomTitle">Moonbloom Lounge</strong>
+              <div id="roomSubtitle" style="color: var(--muted); font-size: 0.9rem;">Soft, live, and ready for conversation</div>
+            </div>
+            <div id="userBadge" class="pill">offline</div>
+          </div>
+          <div class="messages" id="messages"></div>
+          <div class="composer">
+            <input id="messageInput" placeholder="Say something sweet..." />
+            <button id="sendBtn">Send</button>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      const state = { username: '', password: '', messages: [], conversations: [], activeConversation: 'general' };
+      const messagesEl = document.getElementById('messages');
+      const authCard = document.getElementById('authCard');
+      const statusCard = document.getElementById('statusCard');
+      const presenceList = document.getElementById('presenceList');
+      const userBadge = document.getElementById('userBadge');
+      const userNameLabel = document.getElementById('userNameLabel');
+      const usernameInput = document.getElementById('username');
+      const passwordInput = document.getElementById('password');
+      const messageInput = document.getElementById('messageInput');
+      const roomTitle = document.getElementById('roomTitle');
+      const roomSubtitle = document.getElementById('roomSubtitle');
+      const conversationList = document.getElementById('conversationList');
+      const roomNameInput = document.getElementById('roomName');
+      let eventSource = null;
+
+      function formatTime(value) {
+        const date = new Date(value);
+        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      }
+
+      function setConnectionState(label) {
+        userBadge.textContent = label;
+      }
+
+      function refreshFromServer() {
+        if (!state.username) return;
+        loadConversations();
+        loadMessages();
+        loadUsers();
+      }
+
+      function renderMessages() {
+        messagesEl.innerHTML = '';
+        state.messages.forEach((message) => {
+          const bubble = document.createElement('div');
+          bubble.className = `bubble ${message.kind === 'system' ? 'system' : message.username === state.username ? 'me' : 'other'}`;
+          const content = message.kind === 'system'
+            ? `<div>${message.text}</div>`
+            : `<strong>${message.username}</strong><div>${message.text}</div>`;
+          bubble.innerHTML = `${content}<div class="meta">${formatTime(message.timestamp)}${message.username === state.username ? ' · sent' : ''}</div>`;
+          messagesEl.appendChild(bubble);
+        });
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function renderConversations() {
+        conversationList.innerHTML = '';
+        state.conversations.forEach((conversation) => {
+          const button = document.createElement('button');
+          button.className = `conversation-button ${conversation.id === state.activeConversation ? 'active' : ''}`;
+          button.innerHTML = `<strong>${conversation.name}</strong><div style="font-size:0.8rem;color:var(--muted);margin-top:4px;">${conversation.preview}</div>`;
+          button.addEventListener('click', () => selectConversation(conversation.id));
+          conversationList.appendChild(button);
+        });
+      }
+
+      async function loadConversations() {
+        const response = await fetch('/api/conversations');
+        const data = await response.json();
+        state.conversations = data.conversations || [];
+        if (!state.conversations.some((conversation) => conversation.id === state.activeConversation)) {
+          state.activeConversation = state.conversations[0]?.id || 'general';
+        }
+        renderConversations();
+      }
+
+      async function loadMessages() {
+        const response = await fetch(`/api/messages?conversation=${state.activeConversation}`);
+        const data = await response.json();
+        state.messages = data.messages || [];
+        const activeConversation = state.conversations.find((conversation) => conversation.id === state.activeConversation) || state.conversations[0];
+        roomTitle.textContent = activeConversation ? activeConversation.name : 'Moonbloom Lounge';
+        roomSubtitle.textContent = activeConversation ? activeConversation.description : 'Soft, live, and ready for conversation';
+        renderMessages();
+      }
+
+      async function loadUsers() {
+        const response = await fetch('/api/users');
+        const data = await response.json();
+        presenceList.innerHTML = (data.users || []).map((user) => `<div>${user.username} ${user.online ? '● online' : '○ away'}</div>`).join('');
+      }
+
+      function connectEvents() {
+        if (eventSource) {
+          eventSource.close();
+        }
+        eventSource = new EventSource('/api/events');
+        eventSource.addEventListener('open', () => {
+          setConnectionState(state.username ? 'live' : 'offline');
+        });
+        eventSource.addEventListener('message', () => {
+          setConnectionState('live');
+          refreshFromServer();
+        });
+        eventSource.addEventListener('presence', () => {
+          setConnectionState('live');
+          refreshFromServer();
+        });
+        eventSource.addEventListener('conversation', () => {
+          setConnectionState('live');
+          refreshFromServer();
+        });
+        eventSource.addEventListener('error', () => {
+          setConnectionState('reconnect');
+        });
+      }
+
+      async function login() {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+        if (!username || !password) return;
+        state.username = username;
+        state.password = password;
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await response.json();
+        if (!data.ok) {
+          alert(data.message || 'Login failed');
+          return;
+        }
+        authCard.classList.add('hidden');
+        statusCard.classList.remove('hidden');
+        userNameLabel.textContent = username;
+        setConnectionState('connecting');
+        await loadConversations();
+        await loadMessages();
+        await loadUsers();
+        connectEvents();
+      }
+
+      async function sendMessage() {
+        const text = messageInput.value.trim();
+        if (!text || !state.username) return;
+        await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: state.username, text, conversation: state.activeConversation }),
+        });
+        messageInput.value = '';
+        await loadConversations();
+        await loadMessages();
+        await loadUsers();
+      }
+
+      async function createRoom() {
+        const name = roomNameInput.value.trim();
+        if (!name) return;
+        await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description: 'A fresh cozy room for your crew' }),
+        });
+        roomNameInput.value = '';
+        await loadConversations();
+        state.activeConversation = state.conversations[state.conversations.length - 1]?.id || state.activeConversation;
+        await loadMessages();
+      }
+
+      async function selectConversation(conversationId) {
+        state.activeConversation = conversationId;
+        renderConversations();
+        await loadMessages();
+      }
+
+      document.getElementById('loginBtn').addEventListener('click', login);
+      document.getElementById('sendBtn').addEventListener('click', sendMessage);
+      document.getElementById('createRoomBtn').addEventListener('click', createRoom);
+      messageInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          sendMessage();
+        }
+      });
+      roomNameInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          createRoom();
+        }
+      });
+      window.addEventListener('beforeunload', () => {
+        if (eventSource) {
+          eventSource.close();
+        }
+      });
+      setConnectionState('offline');
+      loadMessages();
+    </script>
+  </body>
+</html>

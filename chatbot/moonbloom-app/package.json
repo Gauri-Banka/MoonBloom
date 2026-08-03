@@ -1,0 +1,9 @@
+{
+  "name": "moonbloom-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Moonbloom chat prototype",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
